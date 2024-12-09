@@ -25,7 +25,7 @@ config PCI_TESTDEV
     default y if TEST_DEVICES
     depends on PCI
 
-config PCI_ECHODEV
+config PCI_INFERENCE_DEVICE
     bool
     default y if TEST_DEVICES
     depends on PCI

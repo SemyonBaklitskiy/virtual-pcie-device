@@ -1,4 +1,4 @@
-/build
-/scripts
-/tests
+build/*
+scripts/*
+tests/*
 *.tar.gz
