@@ -1,0 +1,7 @@
+cargo new driver
+[dependencies]
+pci-driver = "version"
+tock-registers = "version"
+vebdor= 0x1234
+device = 0xcafe
+

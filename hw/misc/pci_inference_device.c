@@ -29,8 +29,8 @@ struct StatusBitfields
 {
 	uint32_t busy : 1,
 		done : 1,
-		// error: ...
-		reserved : 30;
+		error: 4,
+		reserved : 26;
 };
 
 union Control
@@ -47,21 +47,21 @@ union Status
 struct RegisterSpace
 {
 	union Control control; // RW
-	// TODO: union Control control_w1s; // W1S
-	// TODO: union Control control_w1c; // W1C
+	union Control control_w1s; // W1S
+	union Control control_w1c; // W1C
 	union Status status; // RO
+	uint32_t padding [48/4];
 };
 
-// TODO: Other BARs
 struct PciInferenceDevice
 {
 	PCIDevice pdev;
 	MemoryRegion mmio_bar0; // register space
-	// MemoryRegion mmio_bar1; // input data
-	// MemoryRegion mmio_bar2; // output data
+	MemoryRegion mmio_bar1; // input data
+	MemoryRegion mmio_bar2; // output data
 	struct RegisterSpace regspace; // 4096 / 4 = 1024
-								   // uint8_t bar1[4096];
-								   // uint8_t bar2[4096];
+	uint8_t input_data [4096];
+	uint8_t output_data [4096];
 };
 
 static uint64_t
@@ -72,34 +72,47 @@ pci_inference_device_bar0_mmio_read(void *ptr, hwaddr offset, uint32_t size)
 	// ptr was given in memory_region_init_io() function
 	struct PciInferenceDevice *device = ptr;
 
-	// if (offset + size > sizeof(device->bar0))
-	// {
-	// 	// Out of bounds
-	// 	// TODO: Maybe useless check
-	// 	printf("pci_inference_device_bar0_mmio_read() out of bar\n");
-	// 	return 0;
-	// }
-
 	uint64_t *base = (uint64_t *)(&device->regspace);
 
 	return *(base + offset);
 }
 
-// static void start_inference(void)
-// {
-// 	// TODO: Add inference logic
-// 	// ...
-// 	// regspace->status.bitfields.busy &= 0;
-// 	printf("start_inference() starting inference\n");
-// 	return;
-// }
+static uint64_t
+pci_inference_device_bar1_mmio_read(void *ptr, hwaddr offset, uint32_t size)
+{
+	printf("pci_inference_device_bar1_mmio_read() offset = 0x%lx; size = 0x%x \n", offset, size);
 
-// static void stop_inference(void)
-// {
-// 	// TODO: The same
-// 	printf("stop_inference()\n");
-// 	return;
-// }
+	// ptr was given in memory_region_init_io() function
+	struct PciInferenceDevice *device = ptr;
+
+	return *((uint64_t *)(&device->input_data + offset));
+}
+
+static uint64_t
+pci_inference_device_bar2_mmio_read(void *ptr, hwaddr offset, uint32_t size)
+{
+	printf("pci_inference_device_bar2_mmio_read() offset = 0x%lx; size = 0x%x \n", offset, size);
+
+	// ptr was given in memory_region_init_io() function
+	struct PciInferenceDevice *device = ptr;
+
+	return *((uint64_t *)(&device->output_data + offset));
+}
+
+static void start_inference(void)
+{
+	// TODO: Add inference logic
+	// ...
+	printf("start_inference() starting inference\n");
+	return;
+}
+
+static void stop_inference(void)
+{
+	// TODO: The same
+	printf("stop_inference()\n");
+	return;
+}
 
 static void pci_inference_device_bar0_mmio_write(void *ptr, hwaddr offset, uint64_t value,
 												 uint32_t size)
@@ -107,50 +120,49 @@ static void pci_inference_device_bar0_mmio_write(void *ptr, hwaddr offset, uint6
 	printf("pci_inference_device_bar0_mmio_write() addr = 0x%lx; size = 0x%x; value = 0x%lx\n", offset, size, value);
 	struct PciInferenceDevice *device = ptr;
 
-	// if (offset + size > sizeof(device->bar0))
-	// {
-	// 	// Out of bounds
-	// 	// TODO: Maybe useless check
-	// 	printf("pci_inference_device_bar0_mmio_write() out of bar\n");
-	// 	return;
-	// }
-
 	// TODO: We shouldn't allow to write in RO register
-	// if ((offsetof(struct RegisterSpace, status) <= offset) && (offset <= offsetof(struct RegisterSpace, status)))
-	// {
-	// 	printf("pci_inference_device_bar0_mmio_write() couldn't write to RO register\n");
-	// 	return;
-	// }
+	if ((offsetof(struct RegisterSpace, status) <= offset) && (offset <= offsetof(struct RegisterSpace, status)))
+	{
+		printf("pci_inference_device_bar0_mmio_write() couldn't write to RO register\n");
+		return;
+	}
 
 	uint64_t *base = (uint64_t *)(&device->regspace);
 
 	*(base + offset) = value;
 
-	// if (device->regspace.control.bitfields.start == 1)
-	// {
-	// 	device->regspace.status.bitfields.busy = 1;
-	// 	device->regspace.status.bitfields.done = 0;
-	// 	device->regspace.control.bitfields.stop = 0;
-	// 	printf("Before inference: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
+	if (device->regspace.control.bitfields.start == 1)
+	{
+		device->regspace.status.bitfields.busy = 1;
+		device->regspace.status.bitfields.done = 0;
+		device->regspace.control.bitfields.stop = 0;
+		printf("Before inference: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
 
-	// 	start_inference();
+		start_inference();
 
-	// 	device->regspace.status.bitfields.busy = 0;
-	// 	device->regspace.status.bitfields.done = 1;
-	// 	device->regspace.control.bitfields.start = 0;
-	// 	printf("After inference: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
-	// }
-	// else if (device->regspace.control.bitfields.stop == 1)
-	// {
-	// 	device->regspace.status.bitfields.busy = 0;
-	// 	device->regspace.status.bitfields.done = 0;
-	// 	device->regspace.control.bitfields.start = 0;
-	// 	printf("Before stop: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
-	// 	stop_inference();
+		device->regspace.status.bitfields.busy = 0;
+		device->regspace.status.bitfields.done = 1;
+		device->regspace.control.bitfields.start = 0;
+		printf("After inference: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
+	}
+	else if (device->regspace.control.bitfields.stop == 1)
+	{
+		device->regspace.status.bitfields.busy = 0;
+		device->regspace.status.bitfields.done = 0;
+		device->regspace.control.bitfields.start = 0;
+		printf("Before stop: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
+		stop_inference();
 
-	// 	device->regspace.control.bitfields.stop = 0;
-	// 	printf("After stop: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
-	// }
+		device->regspace.control.bitfields.stop = 0;
+		printf("After stop: status = 0x%x; control = 0x%x\n", device->regspace.status.value, device->regspace.control.value);
+	}
+}
+
+static void pci_inference_device_bar1_mmio_write(void *ptr, hwaddr offset, uint64_t value,
+												 uint32_t size) 
+{
+	struct PciInferenceDevice *device = ptr;
+	*((uint64_t*)(&device->input_data + offset)) = value;
 }
 
 // Operations for the Memory Region.
@@ -159,14 +171,42 @@ static const MemoryRegionOps bar0_mmio_ops = {
 	.write = pci_inference_device_bar0_mmio_write,
 	.endianness = DEVICE_LITTLE_ENDIAN,
 	.valid = {
-		.min_access_size = 8,
+		.min_access_size = 1,
+		.max_access_size = 4,
+	},
+	.impl = {
+		.min_access_size = 1,
+		.max_access_size = 4,
+	},
+
+};
+
+static const MemoryRegionOps bar1_mmio_ops = {
+	.read = pci_inference_device_bar1_mmio_read,
+	.write = pci_inference_device_bar1_mmio_write,
+	.endianness = DEVICE_LITTLE_ENDIAN,
+	.valid = {
+		.min_access_size = 1,
 		.max_access_size = 8,
 	},
 	.impl = {
-		.min_access_size = 8,
+		.min_access_size = 1,
 		.max_access_size = 8,
 	},
 
+};
+
+static const MemoryRegionOps bar2_mmio_ops = {
+	.read = pci_inference_device_bar2_mmio_read,
+	.endianness = DEVICE_LITTLE_ENDIAN,
+	.valid = {
+		.min_access_size = 1,
+		.max_access_size = 8,
+	},
+	.impl = {
+		.min_access_size = 1,
+		.max_access_size = 8,
+	},
 };
 
 // implementation of the realize function.
@@ -179,14 +219,23 @@ static void pci_inference_device_realize(PCIDevice *pdev, Error **errp)
 
 	// initial configuration of devices registers.
 	memset((uint8_t *)(&device->regspace), 0, sizeof(device->regspace));
+	memset(&device->input_data, 0, sizeof(device->input_data));
+	memset(&device->output_data, 0, sizeof(device->output_data));
+
 
 	// Initialize an I/O memory region(pciechodev->mmio).
 	// Accesses to this region will cause the callbacks
 	// of the bar0_mmio_ops to be called.
 	memory_region_init_io(&device->mmio_bar0, OBJECT(device), &bar0_mmio_ops, device, "pci-inference-device-mmio", sizeof(device->regspace));
+	memory_region_init_io(&device->mmio_bar1, OBJECT(device), &bar1_mmio_ops, device, "pci-inference-device-mmio", sizeof(device->input_data));
+	memory_region_init_io(&device->mmio_bar2, OBJECT(device), &bar2_mmio_ops, device, "pci-inference-device-mmio", sizeof(device->output_data));
+
 	// registering the pdev and all of the above configuration
 	// (actually filling a PCI-IO region with our configuration.
 	pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &device->mmio_bar0);
+	pci_register_bar(pdev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &device->mmio_bar1);
+	pci_register_bar(pdev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &device->mmio_bar2);
+
 }
 
 // uninitializing functions performed.
