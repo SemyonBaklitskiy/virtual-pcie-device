@@ -24,9 +24,9 @@ struct PciInferenceDevice
 	MemoryRegion mmio_bar0; // register space
 	// MemoryRegion mmio_bar1; // input data
 	// MemoryRegion mmio_bar2; // output data
-	uint32_t bar0[1024]; // 4096 / 4 = 1024
-						 // uint8_t bar1[4096];
-						 // uint8_t bar2[4096];
+	uint32_t bar0[2]; // 4096 / 4 = 1024
+					  // uint8_t bar1[4096];
+					  // uint8_t bar2[4096];
 };
 
 // TODO: use uint_32t
@@ -73,6 +73,7 @@ pci_inference_device_bar0_mmio_read(void *ptr, hwaddr offset, uint32_t size)
 
 	// ptr was given in memory_region_init_io() function
 	struct PciInferenceDevice *device = ptr;
+	printf("");
 
 	if (offset + size > sizeof(device->bar0))
 	{
@@ -126,29 +127,29 @@ static void pci_inference_device_bar0_mmio_write(void *ptr, hwaddr offset, uint6
 
 	device->bar0[offset] = value;
 
-	if ((reg_space->control.bitfields.start & 1) == 1)
+	if (reg_space->control.bitfields.start == 1)
 	{
-		reg_space->status.bitfields.busy |= 1;
-		reg_space->status.bitfields.done &= 0;
-		reg_space->control.bitfields.stop &= 0;
+		reg_space->status.bitfields.busy = 1;
+		reg_space->status.bitfields.done = 0;
+		reg_space->control.bitfields.stop = 0;
 		printf("Before inference: status = 0x%x; control = 0x%x\n", reg_space->status.value, reg_space->control.value);
 
 		start_inference();
 
-		reg_space->status.bitfields.busy &= 0;
-		reg_space->status.bitfields.done |= 1;
-		reg_space->control.bitfields.start &= 0;
+		reg_space->status.bitfields.busy = 0;
+		reg_space->status.bitfields.done = 1;
+		reg_space->control.bitfields.start = 0;
 		printf("After inference: status = 0x%x; control = 0x%x\n", reg_space->status.value, reg_space->control.value);
 	}
-	else if ((reg_space->control.bitfields.stop & 1) == 1)
+	else if (reg_space->control.bitfields.stop == 1)
 	{
-		reg_space->status.bitfields.busy &= 0;
-		reg_space->status.bitfields.done &= 0;
-		reg_space->control.bitfields.start &= 0;
+		reg_space->status.bitfields.busy = 0;
+		reg_space->status.bitfields.done = 0;
+		reg_space->control.bitfields.start = 0;
 		printf("Before stop: status = 0x%x; control = 0x%x\n", reg_space->status.value, reg_space->control.value);
 		stop_inference();
 
-		reg_space->control.bitfields.stop &= 0;
+		reg_space->control.bitfields.stop = 0;
 		printf("After stop: status = 0x%x; control = 0x%x\n", reg_space->status.value, reg_space->control.value);
 	}
 }
@@ -159,12 +160,12 @@ static const MemoryRegionOps bar0_mmio_ops = {
 	.write = pci_inference_device_bar0_mmio_write,
 	.endianness = DEVICE_LITTLE_ENDIAN,
 	.valid = {
-		.min_access_size = 4,
-		.max_access_size = 4,
+		.min_access_size = 8,
+		.max_access_size = 8,
 	},
 	.impl = {
-		.min_access_size = 4,
-		.max_access_size = 4,
+		.min_access_size = 8,
+		.max_access_size = 8,
 	},
 
 };
@@ -214,8 +215,8 @@ static void pci_inference_device_class_init(ObjectClass *class, void *data)
 	k->exit = pci_inference_device_instance_uninit;
 	k->vendor_id = PCI_VENDOR_ID_QEMU;
 	k->device_id = PCI_INFERENCE_DEVICE_VENDOR_ID; // our device id, 'cafe' hexadecimal
-	k->revision = 0x0;
-	k->class_id = PCI_BASE_CLASS_PROCESSOR; // for example
+	k->revision = 0x0;							   // TODO: ?
+	k->class_id = PCI_BASE_CLASS_PROCESSOR;		   // for example
 
 	/**
 	 * set_bit - Set a bit in memory
