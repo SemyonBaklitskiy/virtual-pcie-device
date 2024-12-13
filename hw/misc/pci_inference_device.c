@@ -65,7 +65,7 @@ struct PciInferenceDevice
 static void start_inference(void)
 {
 	/* TODO: Add inference logic */
-	msleep(10);
+	sleep(2);
 	printf("Start inference\n");
 	return;
 }
@@ -106,7 +106,6 @@ static void pci_inference_device_bar0_mmio_write(void *ptr, hwaddr offset, uint6
 
 	*((uint64_t *)(base + offset)) = value;
 
-
 	if (device->regspace.control.bitfields.reset == 1)
 	{
 		memset((uint8_t *)(&device->regspace), 0, sizeof(device->regspace));
@@ -124,9 +123,8 @@ static void pci_inference_device_bar0_mmio_write(void *ptr, hwaddr offset, uint6
 
 		start_inference();
 
-		memset(&device->input_data, 0, sizeof(device->input_data));
-		memset(&device->output_data, 1, sizeof(device->output_data));
-
+		memset(&device->input_data, 0xBEEF, sizeof(device->input_data));
+		memset(&device->output_data, 0xDEADBEEF, sizeof(device->output_data));
 
 		device->regspace.status.bitfields.busy = 0;
 		device->regspace.status.bitfields.done = 1;
